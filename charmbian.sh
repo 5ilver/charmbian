@@ -38,9 +38,6 @@ echo "$devname" | egrep ^/dev/mmc && needp="p"
 mount | grep $devname && umount "$devname"*
 
 echo "Partitioning..."
-parted -s $devname mklabel gpt
-cgpt create -z $devname
-cgpt create $devname
 
 #Sizes are in blocks, one MB is 2048 blocks
 #Root will take whatever is left over
@@ -48,6 +45,9 @@ ubootsize="4096"
 scriptsize="32768"
 bootsize="1048576"
 
+parted -s $devname mklabel gpt
+cgpt create -z $devname
+cgpt create $devname
 ubootstart="8192"
 bootstart="$(expr $ubootstart + $ubootsize)"
 scriptstart="$(expr $bootstart + $bootsize)"
@@ -55,11 +55,11 @@ scriptstart="$(expr $bootstart + $bootsize)"
 gptsectable="$(cgpt show $devname | grep 'Sec GPT table' | awk '{print $1}')"
 rootstart="$(expr $scriptstart + $scriptsize)"
 rootsize="$(expr $gptsectable - $rootstart)"
+echo "/ is $(expr $rootsize / 2048)MB"
 cgpt add -i 1 -t kernel -b $ubootstart -s $ubootsize -l U-Boot -S 1 -T 5 -P 10 $devname
 cgpt add -i 2 -t data -b $bootstart -s $bootsize -l Boot $devname
 cgpt add -i 12 -t data -b $scriptstart -s $scriptsize -l Script $devname
 cgpt add -i 3 -t data -b $rootstart -s $rootsize -l Root $devname
-echo "/ is $(expr $rootsize / 2048)MB"
 partprobe $devname
 
 ubootpart="$devname""$needp""1"
@@ -80,19 +80,21 @@ fi
 echo "Extracting arch base image in /tmp/arch..."
 tar -xf /tmp/arch/ArchLinuxARM-chromebook-latest.tar.gz -C /tmp/arch/root
 
+echo "Copying kernel..."
 mkfs.ext2 -F "$bootpart"
-mount -v "$bootpart" /mnt
-cp -v /tmp/arch/root/boot/vmlinux.uimg /mnt/
+mount "$bootpart" /mnt
+cp /tmp/arch/root/boot/vmlinux.uimg /mnt/
 umount /mnt
 
+echo "Setting up u-boot scripts..."
 mkfs.vfat "$scriptpart"
 mount "$scriptpart" /mnt
 mkdir /mnt/u-boot
-cp -v /tmp/arch/root/boot/boot.scr.uimg /mnt/u-boot/
+cp /tmp/arch/root/boot/boot.scr.uimg /mnt/u-boot/
 umount /mnt
 
 echo "Downloading nv-uboot bootloader..."
-wget -O - http://commondatastorage.googleapis.com/chromeos-localmirror/distfiles/nv_uboot-snow.kpart.bz2 | bunzip2 > /tmp/nv_uboot-snow.kpart
+wget -q -O - http://commondatastorage.googleapis.com/chromeos-localmirror/distfiles/nv_uboot-snow.kpart.bz2 | bunzip2 > /tmp/nv_uboot-snow.kpart
 echo "Writing nv-uboot to uboot partition..."
 dd if=/tmp/nv_uboot-snow.kpart of="$ubootpart"
 
@@ -149,6 +151,18 @@ Option "ClickFinger2" "3"
 Option "ClickFinger3" "2"
 Option "ClickPad" "1"
 EndSection' > /mnt/usr/share/X11/xorg.conf.d/50-synaptics.conf  
+
+echo -e 'Section "Monitor"
+    Identifier "LVDS0"
+    Option "DPMS" "false"
+EndSection
+
+Section "ServerLayout"
+    Identifier "ServerLayout0"
+    Option "StandbyTime" "0"
+    Option "SuspendTime" "0"
+    Option "OffTime" "0"
+EndSection' > /mnt/usr/share/X11/xorg.conf.d/10-monitor.conf
 
 #TODO Add some sleep hacks here
 #Make sleep fire off when the lid closes
