@@ -21,6 +21,7 @@ which debootstrap || exit
 which wpa_passphrase || exit 
 which expr || exit 
 which ping || exit 
+which bunzip2 || exit 
 
 echo "Checking for net..."
 ping debian.org -c 1 || exit 1
@@ -34,16 +35,16 @@ exit
 fi
 #if it's an mmc device we need a p
 echo "$devname" | egrep ^/dev/mmc && needp="p"
-umount "$devname"*
+mount | grep $devname && umount "$devname"*
 
 echo "Partitioning..."
-parted $devname mklabel gpt
+parted -s $devname mklabel gpt
 cgpt create -z $devname
 cgpt create $devname
 
 #Sizes are in blocks, one MB is 2048 blocks
 #Root will take whatever is left over
-ubootsize="32768"
+ubootsize="4096"
 scriptsize="32768"
 bootsize="1048576"
 
@@ -66,19 +67,25 @@ bootpart="$devname""$needp""2"
 rootpart="$devname""$needp""3"
 scriptpart="$devname""$needp""12"
 
+if [ -e /tmp/arch/ArchLinuxARM-chromebook-latest.tar.gz ]; then
+echo "Looks like we have the arch tarball already"
+else
 mkdir /tmp/arch
 mkdir /tmp/arch/root
-
 echo "Downloading arch base image (to yoink kernel and modules)..."
-wget -O - http://archlinuxarm.org/os/ArchLinuxARM-chromebook-latest.tar.gz > /tmp/arch/ArchLinuxARM-chromebook-latest.tar.gz
+wget -O - http://archlinuxarm.org/os/ArchLinuxARM-chromebook-latest.tar.gz > /tmp/arch/ArchLinuxARM-chromebook-latest.tar.gz.tmp
+mv /tmp/arch/ArchLinuxARM-chromebook-latest.tar.gz.tmp /tmp/arch/ArchLinuxARM-chromebook-latest.tar.gz
+fi
 
 echo "Extracting arch base image in /tmp/arch..."
 tar -xf /tmp/arch/ArchLinuxARM-chromebook-latest.tar.gz -C /tmp/arch/root
 
+mkfs.ext2 -F "$bootpart"
 mount -v "$bootpart" /mnt
 cp -v /tmp/arch/root/boot/vmlinux.uimg /mnt/
 umount /mnt
 
+mkfs.vfat "$scriptpart"
 mount "$scriptpart" /mnt
 mkdir /mnt/u-boot
 cp -v /tmp/arch/root/boot/boot.scr.uimg /mnt/u-boot/
@@ -89,9 +96,10 @@ wget -O - http://commondatastorage.googleapis.com/chromeos-localmirror/distfiles
 echo "Writing nv-uboot to uboot partition..."
 dd if=/tmp/nv_uboot-snow.kpart of="$ubootpart"
 
+mkfs.ext4 -F "$rootpart"
 echo "Starting debootstrap on $rootpart..."
 mount $rootpart /mnt
-debootstrap --components=main,non-free,contrib --arch=armhf --foreign --include=xdm,x11-xserver-utils,xserver-common,xserver-xorg,xserver-xorg-core,xserver-xorg-input-all,xserver-xorg-video-fbdev,links,gpicview,pcmanfm,iceweasel,xterm,fluxbox,xdm,xinit,usbutils,kmod,libkmod2,wget,curl,wireless-tools,wpasupplicant,x11-utils,vim,pm-utils testing /mnt
+debootstrap --no-check-gpg --components=main,non-free,contrib --arch=armhf --foreign --include=xdm,x11-xserver-utils,xserver-common,xserver-xorg,xserver-xorg-core,xserver-xorg-input-all,xserver-xorg-video-fbdev,links,gpicview,pcmanfm,iceweasel,xterm,fluxbox,xdm,xinit,usbutils,kmod,libkmod2,wget,curl,wireless-tools,wpasupplicant,x11-utils,vim,pm-utils jessie /mnt
 
 echo "Package setup in the chroot..."
 chroot /mnt /bin/sh -c "PATH=/bin:/sbin:/usr/sbin:/usr/local/sbin:$PATH /debootstrap/debootstrap --second-stage"
@@ -108,7 +116,7 @@ echo "depmod in the chroot..."
 chroot /mnt /sbin/depmod
 
 echo "Putting a basic sources.list in place..."
-echo "deb http://http.debian.org/debian/ testing main contrib non-free" > /mnt/etc/apt/sources.list
+echo "deb http://http.us.debian.org/debian/ testing main contrib non-free" > /mnt/etc/apt/sources.list
 
 echo "Putting a basic fstab in place..."
 echo "$rootpart	/	ext4	noatime	0	0" > /mnt/etc/fstab
@@ -158,15 +166,8 @@ EndSection' > /mnt/usr/share/X11/xorg.conf.d/50-synaptics.conf
 echo "Basic wpa_supplicant config setup..."
 echo "ctrl_interface=/var/run/wpa_supplicant" > /mnt/etc/wpa_supplicant/wpa_supplicant.conf
 
-#echo "Cleaning up a few packages that break things..."
-#chroot /mnt /bin/bash -c "PATH=/usr/sbin:/usr/local/sbin:/sbin:/bin:/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/bin/core_perl /usr/bin/dpkg -r xserver-xorg-video-all xserver-xorg-video-modesetting"
-
-#if this fails uncomment the above and I'll fix it sooner or later.
-echo "Echoing a line into /usr/share/X11/xorg.conf.d/20-modules.conf to disable xorg modesetting module..."
-echo -i 'Section "Module"
-	Disable "modesetting"
-EndSection' > /mnt/usr/share/X11/xorg.conf.d/20-modules.conf  
-
+echo "Cleaning up a few packages that break things..."
+chroot /mnt /bin/bash -c "PATH=/usr/sbin:/usr/local/sbin:/sbin:/bin:/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/bin/core_perl /usr/bin/dpkg -r xserver-xorg-video-all xserver-xorg-video-modesetting"
 
 echo "Lets set a root pw..."
 chroot /mnt /bin/sh -c "passwd root"
