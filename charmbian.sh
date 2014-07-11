@@ -87,7 +87,7 @@ cp /tmp/arch/root/boot/vmlinux.uimg /mnt/
 umount /mnt
 
 echo "Setting up u-boot scripts..."
-mkfs.vfat "$scriptpart"
+mkfs.vfat -F 16 "$scriptpart"
 mount "$scriptpart" /mnt
 mkdir /mnt/u-boot
 cp /tmp/arch/root/boot/boot.scr.uimg /mnt/u-boot/
@@ -121,8 +121,11 @@ echo "Putting a basic sources.list in place..."
 echo "deb http://http.us.debian.org/debian/ testing main contrib non-free" > /mnt/etc/apt/sources.list
 
 echo "Putting a basic fstab in place..."
-echo "$rootpart	/	ext4	noatime	0	0" > /mnt/etc/fstab
-echo "$bootpart	/boot	ext2	noatime	0	0" >> /mnt/etc/fstab
+#echo "$rootpart	/	ext4	noatime	0	0" > /mnt/etc/fstab
+#echo "$bootpart	/boot	ext2	noatime	0	0" >> /mnt/etc/fstab
+#Experimental by-partlabel attempt to fix dev names changing on sleep 
+echo "/dev/disk/by-partlabel/Root	/	ext4	noatime	0	0" > /mnt/etc/fstab
+echo "/dev/disk/by-partlabel/Boot	/boot	ext2	noatime	0	0" >> /mnt/etc/fstab
 
 echo "Setting up /etc/network/intrfaces.d file for mlan0..."
 echo -e "allow-hotplug mlan0
