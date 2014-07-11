@@ -101,7 +101,7 @@ dd if=/tmp/nv_uboot-snow.kpart of="$ubootpart"
 mkfs.ext4 -F "$rootpart"
 echo "Starting debootstrap on $rootpart..."
 mount $rootpart /mnt
-debootstrap --no-check-gpg --components=main,non-free,contrib --arch=armhf --foreign --include=xdm,x11-xserver-utils,xserver-common,xserver-xorg,xserver-xorg-core,xserver-xorg-input-all,xserver-xorg-video-fbdev,links,gpicview,pcmanfm,iceweasel,xterm,fluxbox,xdm,xinit,usbutils,kmod,libkmod2,wget,curl,wireless-tools,wpasupplicant,x11-utils,vim,pm-utils jessie /mnt
+debootstrap --no-check-gpg --components=main,non-free,contrib --arch=armhf --foreign --include=alsa-utils,acpid,xdm,x11-xserver-utils,xserver-common,xserver-xorg,xserver-xorg-core,xserver-xorg-input-all,xserver-xorg-video-fbdev,links,gpicview,pcmanfm,iceweasel,xterm,fluxbox,xdm,xinit,usbutils,kmod,libkmod2,wget,curl,wireless-tools,wpasupplicant,x11-utils,vim,pm-utils jessie /mnt
 
 echo "Package setup in the chroot..."
 chroot /mnt /bin/sh -c "PATH=/bin:/sbin:/usr/sbin:/usr/local/sbin:$PATH /debootstrap/debootstrap --second-stage"
@@ -165,9 +165,9 @@ Section "ServerLayout"
 EndSection' > /mnt/usr/share/X11/xorg.conf.d/10-monitor.conf
 
 #I don't actually know which of these works...
-echo -e "#!/bin/sh
-state=`echo $1|awk '{print $3}'`
-case $state in
+echo -e '#!/bin/sh
+echo "$(date) lid $3" >> /var/log/lid
+case $3 in
   open)
     echo enabled > /sys/devices/s3c2440-i2c.0/i2c-0/0-0009/power/wakeup
     echo enabled > /sys/devices/s3c2440-i2c.1/i2c-1/1-0025/power/wakeup
@@ -183,14 +183,20 @@ case $state in
     echo disabled > /sys/devices/s3c2440-i2c.4/i2c-4/4-001e/power/wakeup
     pm-suspend
     ;;
-esac" > /mnt/etc/acpi/lid.sh
+esac' > /mnt/etc/acpi/lid.sh
+
+echo -e '# /etc/acpi/events/lidbtn
+# Called when the user closes or opens the lid
+
+event=button/lid*
+action=/etc/acpi/lid.sh %e' > /etc/acpi/events/lidbtn
 
 #TODO Add some sound hacks here
 #Can we make an alsa device that controls Headphones and Speaker volume level?
 #Can we add auto output switching?
 #Can we limit to maybe 80% like chromeos does?
 #Can we just copy the janky sound hacks chromeos already uses?
-echo "amixer | grep Speaker\|Headphone | grep DAC1 | sed 's/Simple mixer control //' | sed 's/,0//' | while read mixcontrol; do amixer sset $mixcontrol on; done; exit 0" > /mnt/etc/rc.local
+echo 'amixer | grep "Speaker\|Headphone" | grep DAC1 | sed "s/Simple mixer control //" | sed "s/,0//" | while read mixcontrol; do amixer sset "$mixcontrol" on; done; exit 0;' > /mnt/etc/rc.local
 
 #TODO magic to make brightness and volume keyboard buttons work
 #brightness control feels real smooth with an exponential curve, can that be done in a proper manner?
