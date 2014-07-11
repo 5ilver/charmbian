@@ -189,8 +189,11 @@ echo -e '# /etc/acpi/events/lidbtn
 # Called when the user closes or opens the lid
 
 event=button/lid*
-action=/etc/acpi/lid.sh %e' > /etc/acpi/events/lidbtn
+action=/etc/acpi/lid.sh %e' > /mnt/etc/acpi/events/lidbtn
 
+chmod +x /mnt/etc/acpi/lid.sh
+chmod +x /mnt/etc/acpi/events/lidbtn
+ 
 #TODO Add some sound hacks here
 #Can we make an alsa device that controls Headphones and Speaker volume level?
 #Can we add auto output switching?
