@@ -11,17 +11,18 @@
 set -e
 setterm -blank 0
 
-which cgpt || exit
-which parted || exit
-which mkfs.vfat || exit
-which mkfs.ext2 || exit
-which mkfs.ext4 || exit
-which wget || exit 
-which debootstrap || exit 
-which wpa_passphrase || exit 
-which expr || exit 
-which ping || exit 
-which bunzip2 || exit 
+which cgpt
+which parted
+which mkfs.vfat
+which mkfs.ext2
+which mkfs.ext4
+which wget
+which wpa_passphrase
+which expr
+which ping
+which bunzip2
+which chroot
+which ar
 
 echo "Checking for net..."
 ping debian.org -c 1 || exit 1
@@ -98,10 +99,14 @@ wget -q -O - http://commondatastorage.googleapis.com/chromeos-localmirror/distfi
 echo "Writing nv-uboot to uboot partition..."
 dd if=/tmp/nv_uboot-snow.kpart of="$ubootpart"
 
-mkfs.ext4 -F "$rootpart"
+echo "Downloading debootstrap..."
+wget http://ftp.us.debian.org/debian/pool/main/d/debootstrap/debootstrap_1.0.60_all.deb
+ar x debootstrap_1.0.60_all.deb
+tar -xf data.tar.xz
 echo "Starting debootstrap on $rootpart..."
+mkfs.ext4 -F "$rootpart"
 mount $rootpart /mnt
-debootstrap --no-check-gpg --components=main,non-free,contrib --arch=armhf --foreign --include=alsa-utils,acpid,xdm,x11-xserver-utils,xserver-common,xserver-xorg,xserver-xorg-core,xserver-xorg-input-all,xserver-xorg-video-fbdev,links,gpicview,pcmanfm,iceweasel,xterm,fluxbox,xdm,xinit,usbutils,kmod,libkmod2,wget,curl,wireless-tools,wpasupplicant,x11-utils,vim,pm-utils jessie /mnt
+DEBOOTSTRAP_DIR=usr/share/debootstrap usr/sbin/debootstrap --no-check-gpg --components=main,non-free,contrib --arch=armhf --foreign --include=alsa-utils,acpid,xdm,x11-xserver-utils,xserver-common,xserver-xorg,xserver-xorg-core,xserver-xorg-input-all,xserver-xorg-video-fbdev,links,gpicview,pcmanfm,iceweasel,xterm,fluxbox,xdm,xinit,usbutils,kmod,libkmod2,wget,curl,wireless-tools,wpasupplicant,x11-utils,vim,pm-utils jessie /mnt
 
 echo "Package setup in the chroot..."
 chroot /mnt /bin/sh -c "PATH=/bin:/sbin:/usr/sbin:/usr/local/sbin:$PATH /debootstrap/debootstrap --second-stage"
