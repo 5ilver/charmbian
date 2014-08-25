@@ -84,15 +84,15 @@ tar -xf /tmp/arch/ArchLinuxARM-chromebook-latest.tar.gz -C /tmp/arch/root
 echo "Copying kernel..."
 mkfs.ext2 -F "$bootpart"
 mount "$bootpart" /mnt
-wget http://archlinuxarm.org/os/exynos/boot.scr.uimg
-cp boot.scr.uimg mnt/u-boot
+cp /tmp/arch/root/boot/vmlinux.uimg /mnt
 umount /mnt
 
 echo "Setting up u-boot scripts..."
 mkfs.vfat -F 16 "$scriptpart"
 mount "$scriptpart" /mnt
 mkdir /mnt/u-boot
-cp /tmp/arch/root/boot/boot.scr.uimg /mnt/u-boot/
+wget http://archlinuxarm.org/os/exynos/boot.scr.uimg
+cp boot.scr.uimg /mnt/u-boot
 umount /mnt
 
 echo "Downloading nv-uboot bootloader..."
