@@ -1,19 +1,16 @@
 #charmbian
 
-Debian Jessie install script for samsung arm chromebook. Designed to be run ON the target device from something other than chromeos (chrubuntu or arch). Required arch packages can be installed with 'pacman -Syu git cgpt parted dosfstools wget binutils', debian/ubuntu package names are probably the same.
+Debian Jessie install script for samsung arm chromebooks. Designed to be run ON the target device from an arch boot stick created from https://archlinuxarm.org/platforms/armv7/samsung/samsung-chromebook-2. Copy charbian.sh to partition 2 either when creating the stick, or after you've booted into the usb environment. You will need to use CTRL+u at the dev mode screen, and you cannot boot from the blue usb3 port.
 
-To run, just './charmbian.sh', then enter the target device path (/dev/mmcblk0 for internal emmc, /dev/mmcblk1 for sdcard, /dev/sda or /dev/sdb for usb devices). If booting from an external card, you may need to use CTRL+u at the dev mode screen, and you cannot boot from the blue usb3 port.
+To run, just 'bash charmbian.sh', then select your wifi, enter the target device path (/dev/mmcblk0 for internal emmc), and hurry up and wait. 
 
 ##The magic
 The magic part is just a honking debootstrap command to build a usable debian root from upstream sources using the arch kernel and modules to get you off of google's udders. It then does a few useful tweaks to make the system usable on first boot.
 
-##deps
-Needs cgpt and a bunch of other junk. Check the head of the script if you like. Obviously you need to already be in dev mode with usb boot enabled.
 
 ##But what does it dooooooo?
 * Partitions your device
-* Grabs arch kernel and modules
-* Grabs nv-uboot
+* Copies arch kernel and modules
 * Grabs debootstrap
 * Debootstraps a debian system
 * Puts a nice trackpad config in place

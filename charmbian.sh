@@ -3,26 +3,29 @@
 #
 # Chrome device ARM Debian installer 
 #
-# Using arch kernel and modules is a massive hack and totally not needed, but I feel
-# better about using a crappy repacked arch kernel than directly using the chromeos one.
 #
-# 2014 - This is hackerware. Do what you like with it as long as you learn something.
+
+# follow instructions at https://archlinuxarm.org/platforms/armv7/samsung/samsung-chromebook-2 or appropriate to make a usb stick that will boot arch, then copy this script to partition 2 and run it from the live usb stick on the target machine
+# 2017 - This is hackerware. Do what you like with it as long as you learn something.
 
 set -e
 setterm -blank 0
 
+wifi-menu
+
+pacman -Sy cgpt parted wget binutils
+
 which cgpt
 which parted
-which mkfs.vfat
-which mkfs.ext2
 which mkfs.ext4
 which wget
-which wpa_passphrase
 which expr
 which ping
 which bunzip2
 which chroot
 which ar
+
+
 
 echo "Checking for net..."
 ping debian.org -c 1 || exit 1
@@ -41,69 +44,32 @@ mount | grep $devname && umount "$devname"*
 echo "Partitioning..."
 
 #Sizes are in blocks, one MB is 2048 blocks
-#Root will take whatever is left over
-ubootsize="4096"
-scriptsize="4096"
-bootsize="1048576"
-
 parted -s $devname mklabel gpt
 cgpt create -z $devname
 cgpt create $devname
-ubootstart="8192"
-bootstart="$(expr $ubootstart + $ubootsize)"
-scriptstart="$(expr $bootstart + $bootsize)"
-#Calculate the hole between Sec GPT table start and Script partition end to find the new Root size
+kernelstart="8192"
+kernelsize="32768"
+rootstart="40960"
+#Calculate the hole between Sec GPT table start and Kernel partition end to find the new Root size
 gptsectable="$(cgpt show $devname | grep 'Sec GPT table' | awk '{print $1}')"
-rootstart="$(expr $scriptstart + $scriptsize)"
+#Root will take whatever is left over
 rootsize="$(expr $gptsectable - $rootstart)"
 echo "/ is $(expr $rootsize / 2048)MB"
-cgpt add -i 1 -t kernel -b $ubootstart -s $ubootsize -l U-Boot -S 1 -T 5 -P 10 $devname
-cgpt add -i 2 -t data -b $bootstart -s $bootsize -l Boot $devname
-cgpt add -i 12 -t data -b $scriptstart -s $scriptsize -l Script $devname
-cgpt add -i 3 -t data -b $rootstart -s $rootsize -l Root $devname
+cgpt add -i 1 -t kernel -b $kernelstart -s $kernelsize -l Kernel -S 1 -T 5 -P 10 $devname
+cgpt add -i 2 -t data -b $rootstart -s $rootsize -l Root $devname
 partprobe $devname
 
-ubootpart="$devname""$needp""1"
-bootpart="$devname""$needp""2"
-rootpart="$devname""$needp""3"
-scriptpart="$devname""$needp""12"
-
-if [ -e /tmp/arch/ArchLinuxARM-chromebook-latest.tar.gz ]; then
-echo "Looks like we have the arch tarball already"
-else
-mkdir /tmp/arch
-mkdir /tmp/arch/root
-echo "Downloading arch base image (to yoink kernel and modules)..."
-wget -O - http://archlinuxarm.org/os/ArchLinuxARM-chromebook-latest.tar.gz > /tmp/arch/ArchLinuxARM-chromebook-latest.tar.gz.tmp
-mv /tmp/arch/ArchLinuxARM-chromebook-latest.tar.gz.tmp /tmp/arch/ArchLinuxARM-chromebook-latest.tar.gz
-fi
-
-echo "Extracting arch base image in /tmp/arch..."
-tar -xf /tmp/arch/ArchLinuxARM-chromebook-latest.tar.gz -C /tmp/arch/root
+kernelpart="$devname""$needp""1"
+rootpart="$devname""$needp""2"
 
 echo "Copying kernel..."
-mkfs.ext2 -F "$bootpart"
-mount "$bootpart" /mnt
-cp /tmp/arch/root/boot/vmlinux.uimg /mnt
-umount /mnt
-
-echo "Setting up u-boot scripts..."
-mkfs.vfat -F 16 "$scriptpart"
-mount "$scriptpart" /mnt
-mkdir /mnt/u-boot
-wget http://archlinuxarm.org/os/exynos/boot.scr.uimg
-cp boot.scr.uimg /mnt/u-boot
-umount /mnt
-
-echo "Downloading nv-uboot bootloader..."
-wget -q -O - http://commondatastorage.googleapis.com/chromeos-localmirror/distfiles/nv_uboot-snow.kpart.bz2 | bunzip2 > /tmp/nv_uboot-snow.kpart
-echo "Writing nv-uboot to uboot partition..."
-dd if=/tmp/nv_uboot-snow.kpart of="$ubootpart"
+#cheating and assuming we are on /dev/sda
+dd if=/dev/sda1 of=$kernelpart
 
 echo "Downloading debootstrap..."
-wget http://ftp.us.debian.org/debian/pool/main/d/debootstrap/debootstrap_1.0.60_all.deb
-ar x debootstrap_1.0.60_all.deb
-tar -xf data.tar.xz
+wget http://ftp.us.debian.org/debian/pool/main/d/debootstrap/debootstrap_1.0.67_all.deb
+ar x debootstrap_1.0.67_all.deb
+tar -xf data.tar.gz
 echo "Starting debootstrap on $rootpart..."
 mkfs.ext4 -F "$rootpart"
 mount $rootpart /mnt
@@ -113,9 +79,9 @@ echo "Package setup in the chroot..."
 chroot /mnt /bin/sh -c "PATH=/bin:/sbin:/usr/sbin:/usr/local/sbin:$PATH /debootstrap/debootstrap --second-stage"
 
 echo "Copying over arch kernel modules..."
-cp -R /tmp/arch/root/lib/modules /mnt/lib/
+cp -R /lib/modules /mnt/lib/
 echo "Copying over arch firmware..."
-cp -R /tmp/arch/root/lib/firmware /mnt/lib/
+cp -R /lib/firmware /mnt/lib/
 
 echo "Extracting arch modules for debian..."
 for compressedmodule in $(find /mnt/lib/modules | egrep ^*.ko.gz); do gunzip -v $compressedmodule; done
@@ -124,14 +90,10 @@ echo "depmod in the chroot..."
 chroot /mnt /sbin/depmod
 
 echo "Putting a basic sources.list in place..."
-echo "deb http://http.us.debian.org/debian/ testing main contrib non-free" > /mnt/etc/apt/sources.list
+echo "deb http://http.us.debian.org/debian/ jessie main contrib non-free" > /mnt/etc/apt/sources.list
 
 echo "Putting a basic fstab in place..."
-#echo "$rootpart	/	ext4	noatime	0	0" > /mnt/etc/fstab
-#echo "$bootpart	/boot	ext2	noatime	0	0" >> /mnt/etc/fstab
-#Experimental by-partlabel attempt to fix dev names changing on sleep 
 echo "/dev/disk/by-partlabel/Root	/	ext4	noatime	0	0" > /mnt/etc/fstab
-echo "/dev/disk/by-partlabel/Boot	/boot	ext2	noatime	0	0" >> /mnt/etc/fstab
 
 echo "Setting up /etc/network/intrfaces.d file for mlan0..."
 echo -e "allow-hotplug mlan0
