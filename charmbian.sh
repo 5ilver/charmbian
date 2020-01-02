@@ -6,14 +6,31 @@
 #
 
 # follow instructions at https://archlinuxarm.org/platforms/armv7/samsung/samsung-chromebook-2 or appropriate to make a usb stick that will boot arch, then copy this script to partition 2 and run it from the live usb stick on the target machine
-# 2017 - This is hackerware. Do what you like with it as long as you learn something.
+# 2019 - This is hackerware. Do what you like with it as long as you learn something.
 
-set -e
+#wifi seems broken in a debian buster target right now. On the bright side, suspend/resume work!
+
 setterm -blank 0
 
-wifi-menu
+echo "Set up a WPA1/2 wireless network"
+echo "Enter an essid, or nothing to skip"
+read essid
+if [ ! $essid == "" ]; then 
+	echo "Enter passphase (Will echo!)"
+	read passphrase
+	wpa_passphrase $essid $passphrase >> /tmp/wpa_supplicant.conf
+	wpa_supplicant -c /tmp/wpa_supplicant.conf -i mlan0 &
+	sleep 5
+	echo sharting dhcp
+	dhcpcd
+	sleep 5
+fi
 
-pacman -Sy cgpt parted wget binutils
+pacman-key --init
+pacman-key --populate archlinuxarm
+
+
+pacman --noconfirm -Sy cgpt parted wget binutils
 
 which cgpt
 which parted
@@ -67,13 +84,15 @@ echo "Copying kernel..."
 dd if=/dev/sda1 of=$kernelpart
 
 echo "Downloading debootstrap..."
-wget http://ftp.us.debian.org/debian/pool/main/d/debootstrap/debootstrap_1.0.67_all.deb
-ar x debootstrap_1.0.67_all.deb
+wget http://ftp.us.debian.org/debian/pool/main/d/debootstrap/debootstrap_1.0.116_all.deb
+ar x debootstrap_1.0.116_all.deb
 tar -xf data.tar.gz
 echo "Starting debootstrap on $rootpart..."
 mkfs.ext4 -F "$rootpart"
 mount $rootpart /mnt
-DEBOOTSTRAP_DIR=usr/share/debootstrap usr/sbin/debootstrap --no-check-gpg --components=main,non-free,contrib --arch=armhf --foreign --include=alsa-utils,acpid,xdm,x11-xserver-utils,xserver-common,xserver-xorg,xserver-xorg-core,xserver-xorg-input-all,xserver-xorg-video-fbdev,links,gpicview,pcmanfm,iceweasel,xterm,fluxbox,xdm,xinit,usbutils,kmod,libkmod2,wget,curl,wireless-tools,wpasupplicant,x11-utils,vim,pm-utils jessie /mnt
+#DEBOOTSTRAP_DIR=usr/share/debootstrap usr/sbin/debootstrap --no-check-gpg --components=main,non-free,contrib --arch=armhf --foreign --include=alsa-utils,acpid,xdm,x11-xserver-utils,xserver-common,xserver-xorg,xserver-xorg-core,xserver-xorg-input-all,xserver-xorg-video-fbdev,links,gpicview,pcmanfm,iceweasel,xterm,fluxbox,xdm,xinit,usbutils,kmod,libkmod2,wget,curl,wireless-tools,wpasupplicant,x11-utils,vim,pm-utils stable /mnt
+
+DEBOOTSTRAP_DIR=usr/share/debootstrap usr/sbin/debootstrap --no-check-gpg --components=main,non-free,contrib --arch=armhf --foreign --include=alsa-utils,acpid,xdm,x11-xserver-utils,xserver-common,xserver-xorg,xserver-xorg-core,xserver-xorg-input-all,xserver-xorg-video-fbdev,links,gpicview,pcmanfm,iceweasel,xterm,fluxbox,xdm,xinit,usbutils,kmod,libkmod2,wget,curl,wireless-tools,wpasupplicant,x11-utils,vim,pm-utils stable /mnt
 
 echo "Package setup in the chroot..."
 chroot /mnt /bin/sh -c "PATH=/bin:/sbin:/usr/sbin:/usr/local/sbin:$PATH /debootstrap/debootstrap --second-stage"
@@ -90,7 +109,7 @@ echo "depmod in the chroot..."
 chroot /mnt /sbin/depmod
 
 echo "Putting a basic sources.list in place..."
-echo "deb http://http.us.debian.org/debian/ jessie main contrib non-free" > /mnt/etc/apt/sources.list
+echo "deb http://http.us.debian.org/debian/ stable main contrib non-free" > /mnt/etc/apt/sources.list
 
 echo "Putting a basic fstab in place..."
 echo "/dev/disk/by-partlabel/Root	/	ext4	noatime	0	0" > /mnt/etc/fstab
