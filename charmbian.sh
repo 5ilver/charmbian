@@ -6,7 +6,7 @@
 #
 
 # follow instructions at https://archlinuxarm.org/platforms/armv7/samsung/samsung-chromebook-2 or appropriate to make a usb stick that will boot arch, then copy this script to partition 2 and run it from the live usb stick on the target machine
-# 2019 - This is hackerware. Do what you like with it as long as you learn something.
+# 2020 - This is hackerware. Do what you like with it as long as you learn something.
 
 #wifi seems broken in a debian buster target right now. On the bright side, suspend/resume work!
 
@@ -84,13 +84,12 @@ echo "Copying kernel..."
 dd if=/dev/sda1 of=$kernelpart
 
 echo "Downloading debootstrap..."
-wget http://ftp.us.debian.org/debian/pool/main/d/debootstrap/debootstrap_1.0.116_all.deb
-ar x debootstrap_1.0.116_all.deb
+wget http://ftp.us.debian.org/debian/pool/main/d/debootstrap/debootstrap_1.0.123_all.deb
+ar x debootstrap_1.0.123_all.deb
 tar -xf data.tar.gz
 echo "Starting debootstrap on $rootpart..."
 mkfs.ext4 -F "$rootpart"
 mount $rootpart /mnt
-#DEBOOTSTRAP_DIR=usr/share/debootstrap usr/sbin/debootstrap --no-check-gpg --components=main,non-free,contrib --arch=armhf --foreign --include=alsa-utils,acpid,xdm,x11-xserver-utils,xserver-common,xserver-xorg,xserver-xorg-core,xserver-xorg-input-all,xserver-xorg-video-fbdev,links,gpicview,pcmanfm,iceweasel,xterm,fluxbox,xdm,xinit,usbutils,kmod,libkmod2,wget,curl,wireless-tools,wpasupplicant,x11-utils,vim,pm-utils stable /mnt
 
 DEBOOTSTRAP_DIR=usr/share/debootstrap usr/sbin/debootstrap --no-check-gpg --components=main,non-free,contrib --arch=armhf --foreign --include=alsa-utils,acpid,xdm,x11-xserver-utils,xserver-common,xserver-xorg,xserver-xorg-core,xserver-xorg-input-all,xserver-xorg-video-fbdev,links,gpicview,pcmanfm,iceweasel,xterm,fluxbox,xdm,xinit,usbutils,kmod,libkmod2,wget,curl,wireless-tools,wpasupplicant,x11-utils,vim,pm-utils stable /mnt
 
@@ -114,7 +113,7 @@ echo "deb http://http.us.debian.org/debian/ stable main contrib non-free" > /mnt
 echo "Putting a basic fstab in place..."
 echo "/dev/disk/by-partlabel/Root	/	ext4	noatime	0	0" > /mnt/etc/fstab
 
-echo "Setting up /etc/network/intrfaces.d file for mlan0..."
+echo "Setting up /etc/network/interfaces.d file for mlan0..."
 echo -e "allow-hotplug mlan0
 auto mlan0
 iface mlan0 inet dhcp
@@ -154,7 +153,7 @@ Section "ServerLayout"
     Option "OffTime" "0"
 EndSection' > /mnt/usr/share/X11/xorg.conf.d/10-monitor.conf
 
-#I don't actually know which of these works...
+#I don't actually know which of these works but I needed them on a snow...
 echo -e '#!/bin/sh
 echo "$(date) lid $3" >> /var/log/lid
 case $3 in
@@ -205,6 +204,8 @@ chroot /mnt /bin/sh -c "passwd root"
 
 echo "Want to set up a WPA1/2 wireless network in /etc/wpa_supplicant/wpa_supplicant.conf?"
 echo "Enter an essid, or nothing to skip"
+echo "(you may need to run wpa_suppliciant -c /etc/wpa_supplicant/wpa_supplicant.conf and"
+echo "dhclient to activate wifi on boot now due to changes in buster"
 read essid
 if [ ! $essid == "" ]; then 
 	echo "Enter passphase (Will echo!)"
